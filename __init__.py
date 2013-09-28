@@ -1,0 +1,2 @@
+import fiscal_invoice
+
