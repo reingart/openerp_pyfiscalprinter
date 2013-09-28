@@ -53,7 +53,10 @@ class DummyDriver:
     def sendCommand(self, commandNumber, parameters, skipStatusErrors):
         ret = ["C080", "3600", str(self.number), str(self.number), str(self.number), str(self.number),
             str(self.number), str(self.number), str(self.number), str(self.number)]
-        print "sendCommand", ret, parameters
+        try:
+            open("/tmp/fiscal.txt", "a+").write("sendCommand %s %s\n" % (ret, parameters))
+        except:
+            pass
         return ret
 
 
