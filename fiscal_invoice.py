@@ -194,6 +194,7 @@ class fiscal_invoice(osv.osv):
                 importe = line.price_subtotal
                 discount = line.discount or 0
                 iva = 21 # line.invoice_line_tax_id[0].amount    # VAT
+                price = round(price * (100 + iva)/100., 2)  # add tax amount
                 printer.addItem(ds, qty, price, iva, discount, discountDescription="")
 
             
