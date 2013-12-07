@@ -116,20 +116,24 @@ class fiscal_invoice(osv.osv):
                 forma_pago = "Efectivo"
                 obs_comerciales = None
 
-            # customer data (foreign trade):
+            # customer data:
             nombre_cliente = invoice.partner_id.name
+
+            # customer tax number:
             if invoice.partner_id.vat:
-                if invoice.partner_id.vat.startswith("AR"):
-                    # use the Argentina AFIP's global CUIT for the country:
-                    cuit_pais_cliente = invoice.partner_id.vat[2:]
-                    id_impositivo = None
-                else:
-                    # use the VAT number directly
-                    id_impositivo = invoice.partner_id.vat[2:] 
-                    # TODO: the prefix could be used to map the customer country
-                    cuit_pais_cliente = None
+                nro_doc = invoice.partner_id.vat.replace("-","")
             else:
-                cuit_pais_cliente = id_impositivo = None
+                nro_doc = "0"               # only "consumidor final"
+            tipo_doc = 99
+            if nro_doc.startswith("AR"):
+                nro_doc = nro_doc[2:]
+                if int(nro_doc)  == 0:
+                    tipo_doc = DOC_TYPE_SIN_CALIFICADOR # consumidor final
+                elif len(nro_doc) < 11:
+                    tipo_doc = printer.DOC_TYPE_DNI
+                else:
+                    tipo_doc = printer.DOC_TYPE_CUIT
+                        
             if invoice.address_invoice_id:
                 domicilio_cliente = " - ".join([
                                     invoice.address_invoice_id.name or '',
