@@ -145,6 +145,17 @@ class fiscal_invoice(osv.osv):
             else:
                 domicilio_cliente = ""
 
+            # customer VAT category ("Tipo de responsable" according RG1361)
+            if invoice.fiscal_position:
+                if "monotributo" in invoice.fiscal_position.name.lower():
+                    categoria = printer.IVA_TYPE_RESPONSABLE_MONOTRIBUTO
+                elif "consumidor final" in invoice.fiscal_position.name.lower():
+                    categoria = printer.IVA_TYPE_CONSUMIDOR_FINAL
+                elif "exento" in invoice.fiscal_position.name.lower():
+                    categoria = printer.IVA_TYPE_EXENTO
+                elif "responsable inscripto" in invoice.fiscal_position.name.lower():
+                    categoria = printer.IVA_TYPE_RESPONSABLE_INSCRIPTO
+                
             # start to print the invoice:
             printer.cancelAnyDocument()
             printer.openTicket()
