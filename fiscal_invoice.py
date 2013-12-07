@@ -133,14 +133,18 @@ class fiscal_invoice(osv.osv):
                     tipo_doc = printer.DOC_TYPE_DNI
                 else:
                     tipo_doc = printer.DOC_TYPE_CUIT
-                        
-            if invoice.address_invoice_id:
+            
+            # get the address
+            if getattr(invoice, "address_invoice_id", None):
+                address = invoice.address_invoice_id
+            else:
+                address = invoice.partner_id  # V7
+            if address:
                 domicilio_cliente = " - ".join([
-                                    invoice.address_invoice_id.name or '',
-                                    invoice.address_invoice_id.street or '',
-                                    invoice.address_invoice_id.street2 or '',
-                                    invoice.address_invoice_id.zip or '',
-                                    invoice.address_invoice_id.city or '',
+                                    address.street or '',
+                                    address.street2 or '',
+                                    address.zip or '',
+                                    address.city or '',
                                     ])
             else:
                 domicilio_cliente = ""
