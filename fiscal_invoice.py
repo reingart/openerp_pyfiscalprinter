@@ -155,10 +155,27 @@ class fiscal_invoice(osv.osv):
                     categoria = printer.IVA_TYPE_EXENTO
                 elif "responsable inscripto" in invoice.fiscal_position.name.lower():
                     categoria = printer.IVA_TYPE_RESPONSABLE_INSCRIPTO
-                
+
+            # get the fiscal invoice type:
+            if 'factura a' in journal.name.lower():
+                tipo_cbte = "A"
+            elif 'factura b' in journal.name.lower():
+                tipo_cbte = "B"
+            elif 'factura c' in journal.name.lower():
+                tipo_cbte = "C"
+            else:
+                tipo_cbte = None # just a fiscal ticket (without customer data)
+
             # start to print the invoice:
             printer.cancelAnyDocument()
-            printer.openTicket()
+            if not tipo_cbte:
+                printer.openTicket()
+            else:
+                printer.openBillTicket(tipo_cbte, nombre_cliente, 
+                                       domicilio_cliente, nro_doc, tipo_doc, 
+                                       categoria)
+ 
+            # print sample message
             printer.printNonFiscalText("generado desde openerp!")
 
             # print line items - invoice detail
