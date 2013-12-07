@@ -180,7 +180,7 @@ class fiscal_invoice(osv.osv):
                                        categoria)
  
             # print sample message
-            printer.printNonFiscalText("generado desde openerp!")
+            ##printer.printNonFiscalText("generado desde openerp!")
 
             # print line items - invoice detail
             for line in invoice.invoice_line:
@@ -201,10 +201,10 @@ class fiscal_invoice(osv.osv):
             printer.addPayment(forma_pago, imp_total)
 
             # Send additional data
-            if obs_generales:
-                printer.printNonFiscalText(obs_generales)
-            if obs_comerciales:
-                printer.printNonFiscalText(obs_comerciales)
+            ##if obs_generales:
+            ##    printer.printNonFiscalText(obs_generales)
+            ##if obs_comerciales:
+            ##    printer.printNonFiscalText(obs_comerciales)
 
             # close the invoice
             ret = printer.closeDocument()        
