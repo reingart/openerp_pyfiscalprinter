@@ -43,7 +43,7 @@ class fiscal_invoice(osv.osv):
         "Print the invoice in an AFIP homologated printer"
         for invoice in self.browse(cr, uid, ids):
             # if already printed, ignore
-            if invoice.state != 'draft':
+            if invoice.state not in ('draft', 'proforma2'):
                 continue
             # get the fiscal invoice type, point of sale and service:
             journal = invoice.journal_id
@@ -58,22 +58,31 @@ class fiscal_invoice(osv.osv):
             # create the proxy and get the configuration system parameters:
             cfg = self.pool.get('ir.config_parameter')
             driver = cfg.get_param(cr, uid, 'pyfiscalprinter.driver', context=context) or "hasar"
-            model = cfg.get_param(cr, uid, 'pyfiscalprinter.model', context=context) or "715"
+            model = cfg.get_param(cr, uid, 'pyfiscalprinter.model', context=context) or None
             port = cfg.get_param(cr, uid, 'pyfiscalprinter.port', context=context) or "/dev/ttyS0"
-            dummy = cfg.get_param(cr, uid, 'pyfiscalprinter.dummy', context=context) != "false"
+            host = cfg.get_param(cr, uid, 'pyfiscalprinter.host', context=context)
+            if host:
+                port = int(port)
+            dummy = False #cfg.get_param(cr, uid, 'pyfiscalprinter.dummy', context=context) != "false"
+
+            if not model:
+                continue
             
             # import the AFIP printer helper for fiscal invoice
-            if driver == 'epson':
-                from pyfiscalprinter.epsonFiscal import EpsonPrinter
-                printer = EpsonPrinter(deviceFile=port, model=model, dummy=dummy)
-            elif driver == 'hasar':
-                from pyfiscalprinter.hasarPrinter import HasarPrinter
-                printer = HasarPrinter(deviceFile=port, model=model, dummy=dummy)
-            else:
-                raise osv.except_osv('Error !', "Unknown pyfiscalprinter driver: %s" % driver)
+            try:
+                if driver == 'epson':
+                    from pyfiscalprinter.epsonFiscal import EpsonPrinter
+                    printer = EpsonPrinter(deviceFile=port, model=model, dummy=dummy)
+                elif driver == 'hasar':
+                    from pyfiscalprinter.hasarPrinter import HasarPrinter
+                    printer = HasarPrinter(deviceFile=port, model=model, dummy=dummy, host=host, port=port)
+                else:
+                    raise osv.except_osv('Error !', "Unknown pyfiscalprinter driver: %s" % driver)
+            except Exception, e:
+                raise osv.except_osv('Error !', str(e).decode("latin1"))
 
             # get the last 8 digit of the invoice number
-            cbte_nro = int(invoice.number[-8:])
+            cbte_nro = 0 # int(invoice.number[-8:])
             # get the last invoice number registered in AFIP printer
             cbte_nro_afip = printer.getLastNumber("B")
             cbte_nro_next = int(cbte_nro_afip or 0) + 1
@@ -98,6 +107,8 @@ class fiscal_invoice(osv.osv):
                     tipo_doc = 96           # DNI
                 else:
                     tipo_doc = 80           # CUIT
+            elif nro_doc.startswith("PA"):
+                nro_doc = nro_doc[2:]
 
             # invoice amount totals:
             imp_total = abs(invoice.amount_total)
@@ -133,6 +144,9 @@ class fiscal_invoice(osv.osv):
                     tipo_doc = printer.DOC_TYPE_DNI
                 else:
                     tipo_doc = printer.DOC_TYPE_CUIT
+            if nro_doc.startswith("PA"):
+                nro_doc = nro_doc[2:].encode("latin1")
+                    
             
             # get the address
             if getattr(invoice, "address_invoice_id", None):
@@ -150,6 +164,7 @@ class fiscal_invoice(osv.osv):
                 domicilio_cliente = ""
 
             # customer VAT category ("Tipo de responsable" according RG1361)
+            categoria = None
             if invoice.fiscal_position:
                 if "monotributo" in invoice.fiscal_position.name.lower():
                     categoria = printer.IVA_TYPE_RESPONSABLE_MONOTRIBUTO
@@ -167,50 +182,71 @@ class fiscal_invoice(osv.osv):
                 tipo_cbte = "B"
             elif 'factura c' in journal.name.lower():
                 tipo_cbte = "C"
+            elif 'diario de ventas'  in journal.name.lower():
+                tipo_cbte = "A"
             else:
+                raise osv.except_osv('Error !', 'tipo de comprobante invalido')
                 tipo_cbte = None # just a fiscal ticket (without customer data)
 
-            # start to print the invoice:
-            printer.cancelAnyDocument()
-            if not tipo_cbte:
-                printer.openTicket()
-            else:
-                printer.openBillTicket(tipo_cbte, nombre_cliente, 
-                                       domicilio_cliente, nro_doc, tipo_doc, 
-                                       categoria)
- 
-            # print sample message
-            ##printer.printNonFiscalText("generado desde openerp!")
+            try:
+                # start to print the invoice:
+                printer.cancelAnyDocument()
+                if not tipo_cbte:
+                    printer.openTicket()
+                else:
+                    printer.openBillTicket(tipo_cbte, nombre_cliente, 
+                                           domicilio_cliente, nro_doc, tipo_doc, 
+                                           categoria)
+     
+                # print sample message
+                ##printer.printNonFiscalText("generado desde openerp!")
 
-            # print line items - invoice detail
-            for line in invoice.invoice_line:
-                codigo = line.product_id.code
-                u_mtx = 1                       # TODO: get it from uom? 
-                cod_mtx = line.product_id.ean13
-                ds = line.name
-                qty = line.quantity
-                umed = 7                        # TODO: line.uos_id...?
-                price = line.price_unit
-                importe = line.price_subtotal
-                discount = line.discount or 0
-                iva = 21 # line.invoice_line_tax_id[0].amount    # VAT
-                price = round(price * (100 + iva)/100., 2)  # add tax amount
-                printer.addItem(ds, qty, price, iva, discount, discountDescription="")
+                # print line items - invoice detail
+                for line in invoice.invoice_line:
+                    codigo = line.product_id.code
+                    u_mtx = 1                       # TODO: get it from uom? 
+                    cod_mtx = line.product_id.ean13
+                    ds = line.name
+                    qty = line.quantity
+                    umed = 7                        # TODO: line.uos_id...?
+                    price = line.price_unit
+                    importe = line.price_subtotal
+                    discount = line.discount or 0
+                    iva = 7 # line.invoice_line_tax_id[0].amount    # VAT
+                    ##price = round(price * (100 + iva)/100., 2)  # add tax amount
+                    printer.addItem(ds, qty, price, iva, discount, discountDescription="")
 
-            
-            # Send the payment terms           
-            printer.addPayment(forma_pago, imp_total)
+                
+                # Send the payment terms           
+                printer.addPayment(forma_pago, imp_total)
 
-            # Send additional data
-            ##if obs_generales:
-            ##    printer.printNonFiscalText(obs_generales)
-            ##if obs_comerciales:
-            ##    printer.printNonFiscalText(obs_comerciales)
+                # Send additional data
+                ##if obs_generales:
+                ##    printer.printNonFiscalText(obs_generales)
+                ##if obs_comerciales:
+                ##    printer.printNonFiscalText(obs_comerciales)
 
-            # close the invoice
-            ret = printer.closeDocument()        
-            self.log(cr, uid, invoice.id, str(ret))
+                # close the invoice
+                ret = printer.closeDocument()        
+                self.log(cr, uid, invoice.id, str(ret))
 
+            except Exception, e:
+                raise osv.except_osv('Error !', str(e).decode("latin1"))
 
+            #raise osv.except_osv('Error !', 'Prueba OK')
+                        
+#    def unlink(self, cr, uid, ids, context=None):
+#        if context is None:
+#            context = {}
+#        invoices = self.read(cr, uid, ids, ['state','internal_number'], context=context)
+#        unlink_ids = []
+#        for t in invoices:
+#            if t['state'] in ('draft', 'cancel') and t['internal_number']== False:
+#                unlink_ids.append(t['id'])
+#            else:
+#                raise osv.except_osv(_('Invalid Action!'), _('You can not delete an invoice which is not cancelled. You should refund it instead.'))
+#        osv.osv.unlink(self, cr, uid, unlink_ids, context=context)
+#        return True
+    
 fiscal_invoice()
 
