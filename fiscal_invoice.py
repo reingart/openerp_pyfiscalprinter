@@ -182,8 +182,9 @@ class fiscal_invoice(osv.osv):
                 tipo_cbte = "B"
             elif 'factura c' in journal.name.lower():
                 tipo_cbte = "C"
-            elif 'diario de ventas'  in journal.name.lower():
-                tipo_cbte = "A"
+            elif 'diario de ventas' in journal.name.lower() or \
+                 'diario de abono de ventas' in journal.name.lower():
+                tipo_cbte = "A" # para factura (panamá)
             else:
                 raise osv.except_osv('Error !', 'tipo de comprobante invalido')
                 tipo_cbte = None # just a fiscal ticket (without customer data)
@@ -193,11 +194,34 @@ class fiscal_invoice(osv.osv):
                 printer.cancelAnyDocument()
                 if not tipo_cbte:
                     printer.openTicket()
-                else:
+                elif invoice.type != "out_refund":
+                    # abrir comprobante fiscal (factura):
                     printer.openBillTicket(tipo_cbte, nombre_cliente, 
                                            domicilio_cliente, nro_doc, tipo_doc, 
                                            categoria)
-     
+                else:
+                    # abrir comprobante fiscal (nota de credito):
+                    reference = invoice.origin
+                    try:
+                        nro_fac, nro_reg, fecha_fac, hora_fac = reference.split(" ")
+                        fecha_fac = fecha_fac.replace("/", "-")
+                        if "-" in fecha_fac: # convierto de DD-MM-AAAA al formato hasar
+                            dia, mes, anio = [int(h) for h in fecha_fac.split("-")]
+                            fecha_fac = "%02d%02d%02d" % (anio % 2000, mes, dia)
+                        if ":" in hora_fac:
+                            hora_fac = "%02d:%02d:%02d" % tuple([int(h) for h in hora_fac.split(":")])
+                        reference = (nro_fac, nro_reg, fecha_fac, hora_fac)
+                    except Exception, e:
+                        raise osv.except_osv( 
+                                'Error en Documento origen: %s!' % reference,
+                                'Campos (separado por espacio): %s\nEjemplo: %s\n%s' % (
+                                "nro factura, nro reg., fecha factura (DD-MM-AAAA), hora factura (HH:MM:SS)",
+                                "00000341 1FHS110000713 03-02-2013 12:13:00",
+                                str(e)))
+                    printer.openBillCreditTicket(tipo_cbte, nombre_cliente, 
+                                           domicilio_cliente, nro_doc, tipo_doc, 
+                                           categoria, reference)
+                         
                 # print sample message
                 ##printer.printNonFiscalText("generado desde openerp!")
 
