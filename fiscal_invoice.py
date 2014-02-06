@@ -235,7 +235,8 @@ class fiscal_invoice(osv.osv):
                     umed = 7                        # TODO: line.uos_id...?
                     price = line.price_unit
                     importe = line.price_subtotal
-                    discount = line.discount or 0
+                    # line.discount is a percentage, fiscal printer needs an amount:
+                    discount = line.discount * qty * price / 100. if line.discount else 0
                     # VAT:
                     if len(line.invoice_line_tax_id):
                         iva = (line.invoice_line_tax_id[0].amount) * 100.
