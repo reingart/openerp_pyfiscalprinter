@@ -207,7 +207,7 @@ class fiscal_invoice(osv.osv):
                         fecha_fac = fecha_fac.replace("/", "-")
                         if "-" in fecha_fac: # convierto de DD-MM-AAAA al formato hasar
                             dia, mes, anio = [int(h) for h in fecha_fac.split("-")]
-                            fecha_fac = "%02d%02d%02d" % (anio % 2000, mes, dia)
+                            fecha_fac = "%02d-%02d-%02d" % (anio % 2000, mes, dia)
                         if ":" in hora_fac:
                             hora_fac = "%02d:%02d:%02d" % tuple([int(h) for h in hora_fac.split(":")])
                         reference = (nro_fac, nro_reg, fecha_fac, hora_fac)
