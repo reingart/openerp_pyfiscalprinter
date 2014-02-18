@@ -31,8 +31,38 @@ import traceback
 
 DEBUG = True
 
+class FiscalPrinterMixin(object):
 
-class fiscal_invoice(osv.osv):
+    def create_fiscal_printer(self, cr, uid, ids, context):
+        # create the proxy and get the configuration system parameters:
+        cfg = self.pool.get('ir.config_parameter')
+        driver = cfg.get_param(cr, uid, 'pyfiscalprinter.driver', context=context) or "hasar"
+        model = cfg.get_param(cr, uid, 'pyfiscalprinter.model', context=context) or None
+        port = cfg.get_param(cr, uid, 'pyfiscalprinter.port', context=context) or "/dev/ttyS0"
+        host = cfg.get_param(cr, uid, 'pyfiscalprinter.host', context=context)
+        if host:
+            port = int(port)
+        dummy = False #cfg.get_param(cr, uid, 'pyfiscalprinter.dummy', context=context) != "false"
+
+        if not model:
+            return
+        
+        # import the AFIP printer helper for fiscal invoice
+        try:
+            if driver == 'epson':
+                from pyfiscalprinter.epsonFiscal import EpsonPrinter
+                printer = EpsonPrinter(deviceFile=port, model=model, dummy=dummy)
+            elif driver == 'hasar':
+                from pyfiscalprinter.hasarPrinter import HasarPrinter
+                printer = HasarPrinter(deviceFile=port, model=model, dummy=dummy, host=host, port=port)
+            else:
+                raise osv.except_osv('Error !', "Unknown pyfiscalprinter driver: %s" % driver)
+            return printer
+        except Exception, e:
+            raise osv.except_osv('Error !', str(e).decode("latin1"))
+
+
+class fiscal_invoice(osv.osv, FiscalPrinterMixin):
     _name = "account.invoice"
     _inherit = "account.invoice"
     _order = "id"
@@ -52,34 +82,10 @@ class fiscal_invoice(osv.osv):
             ##punto_vta = journal.pyafipws_point_of_sale
             ##service = journal.pyafipws_electronic_invoice_service
             # check if it is an electronic invoice sale point:
-            ##if not tipo_cbte or not punto_vta or not service:
-            ##    continue
 
-            # create the proxy and get the configuration system parameters:
-            cfg = self.pool.get('ir.config_parameter')
-            driver = cfg.get_param(cr, uid, 'pyfiscalprinter.driver', context=context) or "hasar"
-            model = cfg.get_param(cr, uid, 'pyfiscalprinter.model', context=context) or None
-            port = cfg.get_param(cr, uid, 'pyfiscalprinter.port', context=context) or "/dev/ttyS0"
-            host = cfg.get_param(cr, uid, 'pyfiscalprinter.host', context=context)
-            if host:
-                port = int(port)
-            dummy = False #cfg.get_param(cr, uid, 'pyfiscalprinter.dummy', context=context) != "false"
-
-            if not model:
-                continue
-            
-            # import the AFIP printer helper for fiscal invoice
-            try:
-                if driver == 'epson':
-                    from pyfiscalprinter.epsonFiscal import EpsonPrinter
-                    printer = EpsonPrinter(deviceFile=port, model=model, dummy=dummy)
-                elif driver == 'hasar':
-                    from pyfiscalprinter.hasarPrinter import HasarPrinter
-                    printer = HasarPrinter(deviceFile=port, model=model, dummy=dummy, host=host, port=port)
-                else:
-                    raise osv.except_osv('Error !', "Unknown pyfiscalprinter driver: %s" % driver)
-            except Exception, e:
-                raise osv.except_osv('Error !', str(e).decode("latin1"))
+            printer = self.create_fiscal_printer(cr, uid, ids, context)
+            if not printer:
+                continue            
 
             # get the last 8 digit of the invoice number
             cbte_nro = 0 # int(invoice.number[-8:])
@@ -260,9 +266,11 @@ class fiscal_invoice(osv.osv):
                 self.log(cr, uid, invoice.id, str(ret))
 
             except Exception, e:
-                raise osv.except_osv('Error !', str(e).decode("latin1"))
+                tb = traceback.format_exception(*sys.exc_info())
+                tb = ''.join(tb)
+                raise osv.except_osv('Error !', str(e).decode("latin1") + tb)
 
-            #raise osv.except_osv('Error !', 'Prueba OK')
+            ##raise osv.except_osv('Error !', 'Prueba OK')
                         
 #    def unlink(self, cr, uid, ids, context=None):
 #        if context is None:
@@ -279,7 +287,8 @@ class fiscal_invoice(osv.osv):
     
 fiscal_invoice()
 
-class fiscal_printer_daily_close_wizard(osv.osv_memory):
+
+class fiscal_printer_daily_close_wizard(osv.osv_memory, FiscalPrinterMixin):
     _name = 'fiscal_printer_daily_close_wizard'
     _columns = {
         'daily_close_type': fields.selection([
@@ -287,8 +296,11 @@ class fiscal_printer_daily_close_wizard(osv.osv_memory):
             ('Z','Cierre de jornada fiscal Z'),
             ],'Type', select=True, readonly=False, )
     }
-    def cleanup(self,cr,uid,ids,context={}):
-        raise osv.except_osv('UserError','%s' % self.daily_close_type)
+    
+    def do_close(self,cr,uid,ids,context={}):
+        for wiz in self.browse(cr,uid,ids):
+            printer = self.create_fiscal_printer(cr, uid, ids, context)
+            printer.dailyClose(wiz.daily_close_type)
         return {}
 
 fiscal_printer_daily_close_wizard()
