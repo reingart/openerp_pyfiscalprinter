@@ -11,6 +11,40 @@ action_pyfiscalprinter_print()
 write({'state':'open'})</field>
             <field name="kind">function</field>
         </record>
+        
+        <record id="fiscal_printer_daily_close_view" model="ir.ui.view">
+            <field name="name">fiscal_printer_daily_close_wizard.form</field>
+            <field name="model">fiscal_printer_daily_close_wizard</field>
+            <field name="type">form</field>
+            <field name="arch" type="xml">
+                <form string="Cierre Diario Impresora Fiscal">
+                    <label colspan="4" string="Tipo"/>
+                    <field name="daily_close_type" string="Tipo"/>
+                    <group colspan="4">
+                        <button string="Cancel" special="cancel" icon="gtk-cancel"/>
+                        <button string="Cleanup" name="cleanup" type="object" icon="gtk-ok"/>
+                    </group>
+                </form>
+            </field>
+        </record>
+        
+        <record model="ir.actions.act_window" id="fiscal_printer_daily_close_action">
+            <field name="name">fiscal_printer_daily_close_action</field>
+            <field name="view_id" ref="fiscal_printer_daily_close_view"/>
+            <field name="domain">[]</field>
+            <field name="context">{}</field>
+            <field name="res_model">account.invoice</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <!--field name="search_view_id" ref="search_view_id"/-->
+        </record>
+
+        <menuitem id="fiscal_printer_daily_close_menu" 
+                  parent="account.menu_finance_periodical_processing"
+                  name="Cierre de Jornada Fiscal" 
+                  action="fiscal_printer_daily_close_action"
+                  sequence="10"/>
     </data>
 </openerp>
 

@@ -279,3 +279,17 @@ class fiscal_invoice(osv.osv):
     
 fiscal_invoice()
 
+class fiscal_printer_daily_close_wizard(osv.osv_memory):
+    _name = 'fiscal_printer_daily_close_wizard'
+    _columns = {
+        'daily_close_type': fields.selection([
+            ('X','Impresión de un Informe X'),
+            ('Z','Cierre de jornada fiscal Z'),
+            ],'Type', select=True, readonly=False, )
+    }
+    def cleanup(self,cr,uid,ids,context={}):
+        raise osv.except_osv('UserError','%s' % self.daily_close_type)
+        return {}
+
+fiscal_printer_daily_close_wizard()
+
